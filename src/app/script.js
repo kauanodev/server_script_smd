@@ -17,7 +17,7 @@ button.addEventListener("click", async () => {
     const data =  await response.json()
 
     const resultado = document.getElementById("resultado")
-    resultado.textContent = `2 + ${numero} = ${data.resultado} <br> Número de chamadas: ${data.calls}`
+    resultado.textContent = `O Número de chamadas do número ${numero} é: ${data.calls}`
 
 })
 

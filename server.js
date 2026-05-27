@@ -1,52 +1,87 @@
-const express = require("express")
-const db = require("./db/connection")
-const port = 3000
-const path = require("path")
-const { get } = require("http")
-const app = express()
+import express from "express";
+import db from "./db/connection.js"; // Lembre-se da extensão .js
+import path from "path";
+import { fileURLToPath } from "url";
 
+const app = express();
+const port = 3000;
 
-app.use(express.static("src/app")) // Servir arquivos estáticos da pasta "src/app"
-app.use(express.json()) // Middleware para analisar o corpo da requisição como JSON
+// Configuração para emular o __dirname em ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-app.post("/send", (req, res) => {
-    
-    const numero = req.body.number
-    if (verifyIfNumberExists(numero)) {
-        updateCalls(numero)
-    } else {
-        addUser(numero)
+app.use(express.static("src/app"));
+app.use(express.json());
+
+// --- Rotas ---
+
+app.post("/send", async (req, res) => {
+    const numero = req.body.number;
+
+    try {
+        const exists = await verifyIfNumberExists(numero);
+        
+        if (exists) {
+            await updateCalls(numero);
+        } else {
+            await addNumber(numero);
+        }
+
+        const numeroChamadas = await getCalls(numero);
+        
+        console.log(`Número: ${numero} | Chamadas: ${numeroChamadas}`);
+        const resultado = parseInt(numero) + 2;
+        
+        res.json({ resultado: resultado, calls: numeroChamadas });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro no banco de dados" });
     }
-   const numeroChamadas = getCalls(numero)
-    console.log(numero)
-    const resultado = parseInt(numero) + 2
-    res.json({ resultado: resultado, calls: numeroChamadas })
-})
+});
 
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "src/app", "index.html"))
-
-})
+    res.sendFile(path.join(__dirname, "src/app", "index.html"));
+});
 
 app.listen(port, () => {
-    console.log(`Rodando na porta ${port}, dê um ctrl+c para parar o servidor`)
-})
+    console.log(`🚀 Rodando em http://localhost:${port}`);
+    console.log(`Watch mode ativo. Dê um CTRL+C para parar.`);
+});
 
-
-function updateCalls(number) {
-    const user = db.prepare("SELECT * FROM users WHERE number = ?").get(number) 
-    db.prepare("UPDATE users SET calls = ? WHERE number = ?").run(user.calls + 1, number)
-}   
-
-function addUser(number) {
-    db.prepare("INSERT INTO users (number, calls) VALUES (?, ?)").run(number, 1)
-}
+// --- Funções de Banco de Dados (Adaptadas para sqlite3 assíncrono) ---
 
 function verifyIfNumberExists(number) {
-    const user = db.prepare("SELECT * FROM users WHERE number = ?").get(number)     
-    return user !== undefined
+    return new Promise((resolve, reject) => {
+        db.get("SELECT * FROM numbers WHERE number = ?", [number], (err, row) => {
+            if (err) reject(err);
+            resolve(!!row);
+        });
+    });
 }
+
+function updateCalls(number) {
+    return new Promise((resolve, reject) => {
+        db.run("UPDATE numbers SET calls = calls + 1 WHERE number = ?", [number], (err) => {
+            if (err) reject(err);
+            resolve();
+        });
+    });
+}
+
+function addNumber(number) {
+    return new Promise((resolve, reject) => {
+        db.run("INSERT INTO numbers (number, calls) VALUES (?, ?)", [number, 1], (err) => {
+            if (err) reject(err);
+            resolve();
+        });
+    });
+}
+
 function getCalls(number) {
-    const user = db.prepare("SELECT * FROM users WHERE number = ?").get(number) 
-    return user ? user.calls : 0
+    return new Promise((resolve, reject) => {
+        db.get("SELECT calls FROM numbers WHERE number = ?", [number], (err, row) => {
+            if (err) reject(err);
+            resolve(row ? row.calls : 0);
+        });
+    });
 }
